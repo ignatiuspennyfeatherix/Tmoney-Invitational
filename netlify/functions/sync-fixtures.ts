@@ -48,6 +48,17 @@ function fixtureStatus(fixture: FplFixture) {
   return fixture.finished ? "finished" : fixture.started ? "live" : "scheduled";
 }
 
+function predictionPoints(prediction: { home_score: number; away_score: number }, fixture: FplFixture) {
+  if (!fixture.finished || fixture.team_h_score === null || fixture.team_a_score === null) return null;
+  const predictedResult = Math.sign(prediction.home_score - prediction.away_score);
+  const actualResult = Math.sign(fixture.team_h_score - fixture.team_a_score);
+  if (predictedResult !== actualResult) return 0;
+  let points = 5;
+  if (prediction.home_score - prediction.away_score === fixture.team_h_score - fixture.team_a_score) points += 7;
+  if (prediction.home_score === fixture.team_h_score && prediction.away_score === fixture.team_a_score) points += 13;
+  return points;
+}
+
 export default async () => {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY;
@@ -117,6 +128,17 @@ export default async () => {
       });
     const { error: fixturesError } = await supabase.from("fixtures").upsert(fixtures, { onConflict: "provider_id" });
     if (fixturesError) throw fixturesError;
+    const finishedFixtures = new Map(fixturesResponse.filter((fixture) => fixture.finished).map((fixture) => [fixture.id, fixture]));
+    const { data: predictions, error: predictionsError } = await supabase.from("predictions").select("id, fixture_id, home_score, away_score");
+    if (predictionsError) throw predictionsError;
+    await Promise.all((predictions ?? []).map(async (prediction) => {
+      const fixture = finishedFixtures.get(Number(prediction.fixture_id));
+      if (!fixture) return;
+      const points = predictionPoints(prediction, fixture);
+      if (points === null) return;
+      const { error } = await supabase.from("predictions").update({ points }).eq("id", prediction.id);
+      if (error) throw error;
+    }));
     console.log("Fixtures written to Supabase", { fixtures: fixtures.length });
     return Response.json({ imported: { seasons: 1, teams: bootstrap.teams.length, fixtures: fixtures.length } });
   } catch (error) {

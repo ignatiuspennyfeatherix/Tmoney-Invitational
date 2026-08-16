@@ -46,6 +46,7 @@ export default async () => {
       fpl<FplBootstrap>("/bootstrap-static/"),
       fpl<FplFixture[]>("/fixtures/"),
     ]);
+    console.log("FPL payload received", { teams: bootstrap.teams.length, fixtures: fixturesResponse.length });
     const season = new Date().getUTCFullYear();
     const supabase = createClient(supabaseUrl, supabaseSecretKey, {
       auth: { autoRefreshToken: false, persistSession: false },
@@ -101,6 +102,7 @@ export default async () => {
       });
     const { error: fixturesError } = await supabase.from("fixtures").upsert(fixtures, { onConflict: "provider_id" });
     if (fixturesError) throw fixturesError;
+    console.log("Fixtures written to Supabase", { fixtures: fixtures.length });
     return Response.json({ imported: { seasons: 1, teams: bootstrap.teams.length, fixtures: fixtures.length } });
   } catch (error) {
     console.error("Fixture synchronisation failed", error);

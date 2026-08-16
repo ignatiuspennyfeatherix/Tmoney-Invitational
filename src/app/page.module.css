@@ -1,0 +1,35 @@
+.page { min-height: 100vh; padding: 32px 16px; }
+.app { max-width: 560px; margin: 0 auto; overflow: hidden; background: #f7f8f5; border: 1px solid #d9e0d9; border-radius: 24px; box-shadow: 0 20px 48px rgb(15 33 21 / 14%); }
+.header { padding: 28px 24px 20px; color: white; background: linear-gradient(120deg, #143d2b, #9a2030); }
+.headerRow { display: flex; justify-content: space-between; gap: 16px; align-items: start; }
+.header span { font-size: 10px; font-weight: 700; letter-spacing: .13em; text-transform: uppercase; opacity: .8; }
+.header h1 { margin: 5px 0; font-size: 30px; line-height: 1; letter-spacing: -.05em; }
+.header p { margin: 0; font-size: 13px; opacity: .9; }
+.signOut { padding: 7px 10px; color: white; background: transparent; border: 1px solid rgb(255 255 255 / 50%); border-radius: 8px; font-size: 11px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.nav { display: flex; gap: 22px; padding: 14px 24px 0; background: white; overflow-x: auto; }
+.nav a { padding-bottom: 12px; color: #647266; font-size: 13px; font-weight: 700; text-decoration: none; white-space: nowrap; }
+.nav .active { color: #17251a; border-bottom: 2px solid #a31e31; }
+.content { padding: 20px 16px 24px; }
+.sectionHeader { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 0 5px 12px; }
+.sectionHeader h2 { margin: 0; font-size: 16px; letter-spacing: -.02em; }
+.sectionHeader span { color: #a21f31; font-size: 11px; font-weight: 700; }
+.auth { padding: 14px; margin-bottom: 18px; background: #edf3ed; border: 1px solid #d7e1d7; border-radius: 14px; }
+.auth strong { display: block; margin-bottom: 10px; font-size: 14px; }.authFields { display: grid; grid-template-columns: 1fr 1fr auto; gap: 7px; }.auth input { min-width: 0; padding: 9px 10px; color: #17241a; background: white; border: 1px solid #c9d4ca; border-radius: 8px; font-size: 12px; }.authFields button { padding: 9px 11px; color: white; background: #173021; border: 0; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; }.auth p { margin: 9px 0 0; color: #684d12; font-size: 11px; }.authToggle { padding: 0; margin-top: 10px; color: #7f1a29; background: transparent; border: 0; font-size: 11px; font-weight: 700; cursor: pointer; }.welcome { margin: 0 5px 14px; color: #596a5c; font-size: 12px; }.saveMessage { margin: 11px 5px 0; color: #596a5c; font-size: 12px; }
+.fixture { padding: 13px 11px; margin-top: 10px; background: white; border: 1px solid #dfe6df; border-radius: 15px; }
+.fixtureHeader { display: flex; justify-content: space-between; color: #6b796d; font-size: 10px; }
+.fixtureGrid { display: grid; grid-template-columns: minmax(82px, 1fr) 156px minmax(82px, 1fr); align-items: center; gap: 6px; margin-top: 11px; }
+.team { display: grid; justify-items: center; min-width: 0; text-align: center; }
+.team strong { max-width: 100%; overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.badge { display: grid; width: 34px; height: 34px; margin-bottom: 3px; place-items: center; background: #e3ece4; border-radius: 50%; font-size: 11px; font-weight: 800; }
+.position { margin-top: 3px; color: #748176; font-size: 10px; }
+.form { display: flex; gap: 3px; margin-top: 6px; }
+.formResult { display: grid; width: 15px; height: 15px; place-items: center; border-radius: 4px; color: white; font-size: 8px; font-weight: 800; }
+.W { background: #2e7d4d; }.D { background: #ae8527; }.L { background: #a62b3a; }
+.scoreArea { min-width: 0; }.scoreLine { display: grid; grid-template-columns: 1fr 16px 1fr; align-items: end; gap: 4px; }
+.scoreLine > span { padding-bottom: 17px; color: #839084; font-size: 19px; text-align: center; }
+.scoreControl { display: grid; justify-items: center; gap: 5px; }
+.scoreControl button { width: 47px; height: 31px; color: #17241a; background: #f8faf8; border: 1px solid #cbd5cc; border-radius: 8px; font-size: 19px; cursor: pointer; }
+.scoreControl output { display: grid; width: 54px; height: 54px; place-items: center; color: white; background: #173021; border-radius: 11px; font-size: 30px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.superPick, .spacer { display: block; min-height: 11px; margin-top: 8px; color: #946510; font-size: 9px; font-weight: 800; text-align: center; text-transform: uppercase; }
+.actions { display: flex; gap: 8px; margin-top: 15px; }.actions button { cursor: pointer; border-radius: 10px; font-size: 13px; font-weight: 800; }.clear { padding: 0 15px; color: #1c2b20; background: transparent; border: 1px solid #cbd5cc; }.save { flex: 1; padding: 12px; color: white; background: #9d2032; border: 0; }
+@media (max-width: 390px) { .page { padding: 12px 0; }.app { border-radius: 0; border-right: 0; border-left: 0; }.fixtureGrid { grid-template-columns: minmax(72px, 1fr) 142px minmax(72px, 1fr); }.scoreControl button { width: 43px; }.scoreControl output { width: 50px; height: 50px; } }

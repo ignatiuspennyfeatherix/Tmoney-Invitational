@@ -30,6 +30,20 @@ async function fpl<T>(path: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+async function storeCrest(supabase: ReturnType<typeof createClient>, supabaseUrl: string, team: FplTeam) {
+  const sourceUrl = `https://resources.premierleague.com/premierleague/badges/70x70/t${team.code}.png`;
+  const response = await fetch(sourceUrl);
+  if (!response.ok) return null;
+  const image = await response.arrayBuffer();
+  const path = `${team.id}.png`;
+  const { error } = await supabase.storage.from("team-logos").upload(path, image, {
+    contentType: "image/png",
+    upsert: true,
+  });
+  if (error) throw error;
+  return `${supabaseUrl}/storage/v1/object/public/team-logos/${path}`;
+}
+
 function fixtureStatus(fixture: FplFixture) {
   return fixture.finished ? "finished" : fixture.started ? "live" : "scheduled";
 }
@@ -62,15 +76,16 @@ export default async () => {
     }], { onConflict: "provider_id" }).select("id, provider_id");
     if (seasonsError) throw seasonsError;
 
-    const { data: storedTeams, error: teamsError } = await supabase.from("teams").upsert(
-      bootstrap.teams.map((team) => ({
+    const teamRows = await Promise.all(bootstrap.teams.map(async (team) => ({
         provider_id: team.id,
         name: team.name,
         short_name: team.short_name,
-        crest_url: `https://resources.premierleague.com/premierleague/badges/70x70/t${team.code}.png`,
+        crest_url: await storeCrest(supabase, supabaseUrl, team),
         league_position: team.position || null,
         recent_form: team.form?.split("").filter(Boolean) ?? [],
-      })),
+    })));
+    const { data: storedTeams, error: teamsError } = await supabase.from("teams").upsert(
+      teamRows,
       { onConflict: "provider_id" },
     ).select("id, provider_id");
     if (teamsError) throw teamsError;

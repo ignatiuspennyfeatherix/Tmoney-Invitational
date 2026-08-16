@@ -35,7 +35,7 @@ async function storeCrest(supabase: any, supabaseUrl: string, team: FplTeam) {
   const response = await fetch(sourceUrl);
   if (!response.ok) return null;
   const image = await response.arrayBuffer();
-  const path = `${team.id}.png`;
+  const path = `${team.id}-official.png`;
   const { error } = await supabase.storage.from("team-logos").upload(path, image, {
     contentType: "image/png",
     upsert: true,

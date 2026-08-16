@@ -6,35 +6,43 @@ import styles from "./page.module.css";
 import { supabase } from "@/lib/supabase";
 
 type FormResult = "W" | "D" | "L";
+type Team = { id: string; name: string; short_name: string; crest_url: string | null; league_position: number | null; recent_form: string[] };
+type Fixture = { id: string; kickoff_at: string; matchday: number | null; status: "scheduled" | "live" | "finished" | "postponed" | "cancelled"; home_team: Team; away_team: Team };
+type Prediction = { fixture_id: string; home_score: number; away_score: number };
 
-type Fixture = {
-  id: string;
-  kickoff: string;
-  home: { name: string; position: number; badge: string; form: FormResult[] };
-  away: { name: string; position: number; badge: string; form: FormResult[] };
-  superPick?: boolean;
-};
-
-const fixtures: Fixture[] = [
-  { id: "arsenal-united", kickoff: "Saturday · 12:30", home: { name: "Arsenal", position: 1, badge: "A", form: ["W", "W", "D", "W", "W"] }, away: { name: "Man United", position: 5, badge: "MU", form: ["W", "L", "W", "W", "D"] }, superPick: true },
-  { id: "brentford-everton", kickoff: "Saturday · 15:00", home: { name: "Brentford", position: 14, badge: "B", form: ["L", "D", "W", "L", "D"] }, away: { name: "Everton", position: 11, badge: "E", form: ["W", "D", "L", "W", "L"] } },
-];
-
-function Form({ results }: { results: FormResult[] }) {
-  return <div className={styles.form} aria-label={`Recent form: ${results.join(", ")}`}>{results.map((result, index) => <span className={`${styles.formResult} ${styles[result]}`} key={`${result}-${index}`}>{result}</span>)}</div>;
+function readableKickoff(kickoffAt: string) {
+  return new Intl.DateTimeFormat("en-GB", { weekday: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" }).format(new Date(kickoffAt));
 }
 
-function Team({ team }: { team: Fixture["home"] }) {
-  return <div className={styles.team}><span className={styles.badge}>{team.badge}</span><strong>{team.name}</strong><span className={styles.position}>{team.position}{team.position === 1 ? "st" : team.position === 2 ? "nd" : team.position === 3 ? "rd" : "th"} place</span><Form results={team.form} /></div>;
+function ordinal(position: number | null) {
+  if (!position) return "—";
+  const remainder = position % 100;
+  const suffix = remainder >= 11 && remainder <= 13 ? "th" : position % 10 === 1 ? "st" : position % 10 === 2 ? "nd" : position % 10 === 3 ? "rd" : "th";
+  return `${position}${suffix}`;
+}
+
+function formResults(form: string[] | null) {
+  return (form ?? []).filter((result): result is FormResult => result === "W" || result === "D" || result === "L").slice(-5);
+}
+
+function Form({ results }: { results: FormResult[] }) {
+  return <div className={styles.form} aria-label={`Recent form: ${results.join(", ")}`}>{results.length ? results.map((result, index) => <span className={`${styles.formResult} ${styles[result]}`} key={`${result}-${index}`}>{result}</span>) : <span className={styles.noForm}>No form yet</span>}</div>;
+}
+
+function TeamCard({ team }: { team: Team }) {
+  const badge = team.short_name || team.name.slice(0, 2);
+  return <div className={styles.team}>{team.crest_url ? <img className={styles.crest} src={team.crest_url} alt="" /> : <span className={styles.badge}>{badge}</span>}<strong>{team.name}</strong><span className={styles.position}>{team.league_position ? `${ordinal(team.league_position)} place` : "Position pending"}</span><Form results={formResults(team.recent_form)} /></div>;
 }
 
 export default function Home() {
-  const [scores, setScores] = useState<Record<string, [number, number]>>({ "arsenal-united": [2, 1], "brentford-everton": [0, 0] });
+  const [fixtures, setFixtures] = useState<Fixture[]>([]);
+  const [scores, setScores] = useState<Record<string, [number, number]>>({});
   const [session, setSession] = useState<Session | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isCreatingAccount, setIsCreatingAccount] = useState(false);
   const [authMessage, setAuthMessage] = useState("");
+  const [fixtureMessage, setFixtureMessage] = useState("Loading fixtures…");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
 
@@ -43,11 +51,46 @@ export default function Home() {
       const { data } = await supabase.auth.getSession();
       setSession(data.session);
     };
-
     void loadSession();
     const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => setSession(nextSession));
     return () => listener.subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    const loadFixtures = async () => {
+      const { data, error } = await supabase
+        .from("fixtures")
+        .select("id, kickoff_at, matchday, status, home_team:teams!fixtures_home_team_id_fkey(id, name, short_name, crest_url, league_position, recent_form), away_team:teams!fixtures_away_team_id_fkey(id, name, short_name, crest_url, league_position, recent_form)")
+        .in("status", ["scheduled", "live"])
+        .gte("kickoff_at", new Date().toISOString())
+        .order("kickoff_at", { ascending: true });
+
+      if (error) {
+        setFixtureMessage("Fixtures are temporarily unavailable. Please try again shortly.");
+        return;
+      }
+
+      const availableFixtures: Fixture[] = (data ?? []).flatMap((fixture) => {
+        const homeTeam = Array.isArray(fixture.home_team) ? fixture.home_team[0] : fixture.home_team;
+        const awayTeam = Array.isArray(fixture.away_team) ? fixture.away_team[0] : fixture.away_team;
+        return homeTeam && awayTeam ? [{ ...fixture, home_team: homeTeam as Team, away_team: awayTeam as Team } as Fixture] : [];
+      });
+      const nextMatchday = availableFixtures.find((fixture) => fixture.matchday !== null)?.matchday;
+      const currentFixtures = nextMatchday === undefined ? availableFixtures.slice(0, 10) : availableFixtures.filter((fixture) => fixture.matchday === nextMatchday);
+      setFixtures(currentFixtures);
+      setFixtureMessage(currentFixtures.length ? "" : "No upcoming Premier League fixtures are available yet.");
+    };
+    void loadFixtures();
+  }, []);
+
+  useEffect(() => {
+    const loadPredictions = async () => {
+      if (!session || fixtures.length === 0) return;
+      const { data, error } = await supabase.from("predictions").select("fixture_id, home_score, away_score").eq("user_id", session.user.id).in("fixture_id", fixtures.map((fixture) => fixture.id));
+      if (!error) setScores(Object.fromEntries((data as Prediction[]).map((prediction) => [prediction.fixture_id, [prediction.home_score, prediction.away_score]])));
+    };
+    void loadPredictions();
+  }, [fixtures, session]);
 
   const createProfile = async (currentSession: Session) => {
     const displayName = currentSession.user.email?.split("@")[0] ?? "Player";
@@ -58,25 +101,33 @@ export default function Home() {
     event.preventDefault();
     setAuthMessage("");
     setIsSubmitting(true);
-    const result = isCreatingAccount
-      ? await supabase.auth.signUp({ email, password, options: { emailRedirectTo: window.location.origin } })
-      : await supabase.auth.signInWithPassword({ email, password });
-
-    if (result.error) {
-      setAuthMessage(result.error.message);
-    } else if (result.data.session) {
-      await createProfile(result.data.session);
-      setAuthMessage("You are signed in.");
-    } else {
-      setAuthMessage("Check your email to confirm your account, then sign in.");
-    }
+    const result = isCreatingAccount ? await supabase.auth.signUp({ email, password, options: { emailRedirectTo: window.location.origin } }) : await supabase.auth.signInWithPassword({ email, password });
+    if (result.error) setAuthMessage(result.error.message);
+    else if (result.data.session) { await createProfile(result.data.session); setAuthMessage("You are signed in."); }
+    else setAuthMessage("Check your email to confirm your account, then sign in.");
     setIsSubmitting(false);
   };
 
-  const changeScore = (fixtureId: string, side: 0 | 1, change: number) => setScores((current) => ({ ...current, [fixtureId]: current[fixtureId].map((score, index) => index === side ? Math.max(0, score + change) : score) as [number, number] }));
-  const clearPredictions = () => setScores(Object.fromEntries(fixtures.map((fixture) => [fixture.id, [0, 0]])));
-  const savePredictions = () => setSaveMessage(session ? "Fixture sync is the next step. Your score selections are ready to save." : "Sign in first to save predictions.");
-  const signOut = async () => { await supabase.auth.signOut(); setSaveMessage(""); };
+  const changeScore = (fixtureId: string, side: 0 | 1, change: number) => setScores((current) => {
+    const currentScore = current[fixtureId] ?? [0, 0];
+    return { ...current, [fixtureId]: currentScore.map((score, index) => index === side ? Math.max(0, score + change) : score) as [number, number] };
+  });
 
-  return <main className={styles.page}><section className={styles.app}><header className={styles.header}><div className={styles.headerRow}><div><span>Premier League prediction league</span><h1>T-Money Invitational</h1><p>Gameweek 3 · Predictions lock Saturday at 12:30</p></div>{session && <button className={styles.signOut} onClick={signOut}>Sign out</button>}</div></header><nav className={styles.nav}><a className={styles.active} href="#predictions">Predictions</a><a href="#table">League table</a><a href="#survivor">Survivor</a></nav><section className={styles.content} id="predictions">{!session && <form className={styles.auth} onSubmit={submitAuth}><strong>{isCreatingAccount ? "Join the Invitational" : "Sign in to make picks"}</strong><div className={styles.authFields}><input value={email} onChange={(event) => setEmail(event.target.value)} type="email" placeholder="Email address" required /><input value={password} onChange={(event) => setPassword(event.target.value)} type="password" placeholder="Password" minLength={6} required /><button disabled={isSubmitting}>{isSubmitting ? "Please wait" : isCreatingAccount ? "Create account" : "Sign in"}</button></div>{authMessage && <p>{authMessage}</p>}<button className={styles.authToggle} type="button" onClick={() => { setIsCreatingAccount((current) => !current); setAuthMessage(""); }}>{isCreatingAccount ? "Already have an account? Sign in" : "New here? Create an account"}</button></form>}{session && <p className={styles.welcome}>Signed in as <strong>{session.user.email}</strong></p>}<div className={styles.sectionHeader}><h2>Pick every score</h2><span>3 of 10 complete</span></div>{fixtures.map((fixture) => { const [homeScore, awayScore] = scores[fixture.id]; return <article className={styles.fixture} key={fixture.id}><div className={styles.fixtureHeader}><span>{fixture.kickoff}</span><span>{fixture.home.position}th vs {fixture.away.position}th</span></div><div className={styles.fixtureGrid}><Team team={fixture.home} /><div className={styles.scoreArea}><div className={styles.scoreLine}><div className={styles.scoreControl}><button onClick={() => changeScore(fixture.id, 0, 1)} aria-label={`Increase ${fixture.home.name} score`}>+</button><output>{homeScore}</output><button onClick={() => changeScore(fixture.id, 0, -1)} aria-label={`Decrease ${fixture.home.name} score`}>−</button></div><span>−</span><div className={styles.scoreControl}><button onClick={() => changeScore(fixture.id, 1, 1)} aria-label={`Increase ${fixture.away.name} score`}>+</button><output>{awayScore}</output><button onClick={() => changeScore(fixture.id, 1, -1)} aria-label={`Decrease ${fixture.away.name} score`}>−</button></div></div><span className={fixture.superPick ? styles.superPick : styles.spacer}>{fixture.superPick ? "Super Pick · double points" : " "}</span></div><Team team={fixture.away} /></div></article>; })}<div className={styles.actions}><button className={styles.clear} onClick={clearPredictions}>Clear</button><button className={styles.save} onClick={savePredictions}>Save predictions</button></div>{saveMessage && <p className={styles.saveMessage}>{saveMessage}</p>}</section></section></main>;
+  const clearPredictions = () => { setScores({}); setSaveMessage("Unsaved score changes cleared."); };
+
+  const savePredictions = async () => {
+    if (!session) { setSaveMessage("Sign in first to save predictions."); return; }
+    const rows = Object.entries(scores).map(([fixtureId, [homeScore, awayScore]]) => ({ fixture_id: fixtureId, user_id: session.user.id, home_score: homeScore, away_score: awayScore }));
+    if (rows.length === 0) { setSaveMessage("Choose a score before saving."); return; }
+    setIsSubmitting(true);
+    const { error } = await supabase.from("predictions").upsert(rows, { onConflict: "fixture_id,user_id" });
+    setSaveMessage(error ? error.message : `${rows.length} prediction${rows.length === 1 ? "" : "s"} saved.`);
+    setIsSubmitting(false);
+  };
+
+  const signOut = async () => { await supabase.auth.signOut(); setScores({}); setSaveMessage(""); };
+  const matchday = fixtures[0]?.matchday;
+  const completedPredictions = Object.keys(scores).length;
+
+  return <main className={styles.page}><section className={styles.app}><header className={styles.header}><div className={styles.headerRow}><div><span>Premier League prediction league</span><h1>T-Money Invitational</h1><p>{matchday ? `Gameweek ${matchday}` : "Upcoming fixtures"} · Predictions lock at kick-off</p></div>{session && <button className={styles.signOut} onClick={signOut}>Sign out</button>}</div></header><nav className={styles.nav}><a className={styles.active} href="#predictions">Predictions</a><a href="#table">League table</a><a href="#survivor">Survivor</a></nav><section className={styles.content} id="predictions">{!session && <form className={styles.auth} onSubmit={submitAuth}><strong>{isCreatingAccount ? "Join the Invitational" : "Sign in to make picks"}</strong><div className={styles.authFields}><input value={email} onChange={(event) => setEmail(event.target.value)} type="email" placeholder="Email address" required /><input value={password} onChange={(event) => setPassword(event.target.value)} type="password" placeholder="Password" minLength={6} required /><button disabled={isSubmitting}>{isSubmitting ? "Please wait" : isCreatingAccount ? "Create account" : "Sign in"}</button></div>{authMessage && <p>{authMessage}</p>}<button className={styles.authToggle} type="button" onClick={() => { setIsCreatingAccount((current) => !current); setAuthMessage(""); }}>{isCreatingAccount ? "Already have an account? Sign in" : "New here? Create an account"}</button></form>}{session && <p className={styles.welcome}>Signed in as <strong>{session.user.email}</strong></p>}<div className={styles.sectionHeader}><h2>Pick every score</h2><span>{completedPredictions} of {fixtures.length} complete</span></div>{fixtureMessage && <p className={styles.saveMessage}>{fixtureMessage}</p>}{fixtures.map((fixture) => { const [homeScore, awayScore] = scores[fixture.id] ?? [0, 0]; return <article className={styles.fixture} key={fixture.id}><div className={styles.fixtureHeader}><span>{readableKickoff(fixture.kickoff_at)}</span><span>{ordinal(fixture.home_team.league_position)} vs {ordinal(fixture.away_team.league_position)}</span></div><div className={styles.fixtureGrid}><TeamCard team={fixture.home_team} /><div className={styles.scoreArea}><div className={styles.scoreLine}><div className={styles.scoreControl}><button onClick={() => changeScore(fixture.id, 0, 1)} aria-label={`Increase ${fixture.home_team.name} score`}>+</button><output>{homeScore}</output><button onClick={() => changeScore(fixture.id, 0, -1)} aria-label={`Decrease ${fixture.home_team.name} score`}>−</button></div><span>−</span><div className={styles.scoreControl}><button onClick={() => changeScore(fixture.id, 1, 1)} aria-label={`Increase ${fixture.away_team.name} score`}>+</button><output>{awayScore}</output><button onClick={() => changeScore(fixture.id, 1, -1)} aria-label={`Decrease ${fixture.away_team.name} score`}>−</button></div></div></div><TeamCard team={fixture.away_team} /></div></article>; })}{fixtures.length > 0 && <div className={styles.actions}><button className={styles.clear} onClick={clearPredictions}>Clear</button><button className={styles.save} disabled={isSubmitting} onClick={savePredictions}>{isSubmitting ? "Saving…" : "Save predictions"}</button></div>}{saveMessage && <p className={styles.saveMessage}>{saveMessage}</p>}</section></section></main>;
 }

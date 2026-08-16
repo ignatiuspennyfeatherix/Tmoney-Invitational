@@ -107,7 +107,7 @@ export default async () => {
           short_name: detail.team.shortName,
           crest_url: detail.team.crest,
           league_position: detail.position,
-          recent_form: detail.form,
+          recent_form: detail.form?.split(",").filter(Boolean) ?? [],
         })),
         { onConflict: "provider_id" },
       )

@@ -30,7 +30,7 @@ async function fpl<T>(path: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-async function storeCrest(supabase: ReturnType<typeof createClient>, supabaseUrl: string, team: FplTeam) {
+async function storeCrest(supabase: any, supabaseUrl: string, team: FplTeam) {
   const sourceUrl = `https://resources.premierleague.com/premierleague/badges/70x70/t${team.code}.png`;
   const response = await fetch(sourceUrl);
   if (!response.ok) return null;

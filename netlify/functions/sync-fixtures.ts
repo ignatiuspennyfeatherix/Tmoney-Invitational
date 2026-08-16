@@ -23,6 +23,7 @@ type FplFixture = {
 type FplBootstrap = { teams: FplTeam[] };
 
 const fplBaseUrl = "https://fantasy.premierleague.com/api";
+const sportsDbBaseUrl = "https://www.thesportsdb.com/api/v1/json/123";
 
 async function fpl<T>(path: string): Promise<T> {
   const response = await fetch(`${fplBaseUrl}${path}`);
@@ -31,7 +32,10 @@ async function fpl<T>(path: string): Promise<T> {
 }
 
 async function storeCrest(supabase: any, supabaseUrl: string, team: FplTeam) {
-  const sourceUrl = `https://resources.premierleague.com/premierleague/badges/70x70/t${team.code}.png`;
+  const lookup = await fetch(`${sportsDbBaseUrl}/searchteams.php?t=${encodeURIComponent(team.name)}`);
+  const lookupBody = lookup.ok ? (await lookup.json()) as { teams?: Array<{ strBadge: string | null }> } : {};
+  const sourceUrl = lookupBody.teams?.[0]?.strBadge;
+  if (!sourceUrl) return null;
   const response = await fetch(sourceUrl);
   if (!response.ok) return null;
   const image = await response.arrayBuffer();

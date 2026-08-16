@@ -32,7 +32,15 @@ async function fpl<T>(path: string): Promise<T> {
 }
 
 async function storeCrest(supabase: any, supabaseUrl: string, team: FplTeam) {
-  const lookup = await fetch(`${sportsDbBaseUrl}/searchteams.php?t=${encodeURIComponent(team.name)}`);
+  const aliases: Record<string, string> = {
+    "Man Utd": "Manchester United",
+    "Nott'm Forest": "Nottingham Forest",
+    "Leeds": "Leeds United",
+    "Spurs": "Tottenham Hotspur",
+    "Newcastle": "Newcastle United",
+  };
+  const lookupName = aliases[team.name] ?? team.name;
+  const lookup = await fetch(`${sportsDbBaseUrl}/searchteams.php?t=${encodeURIComponent(lookupName)}`);
   const lookupBody = lookup.ok ? (await lookup.json()) as { teams?: Array<{ strBadge: string | null }> } : {};
   const sourceUrl = lookupBody.teams?.[0]?.strBadge;
   if (!sourceUrl) return null;

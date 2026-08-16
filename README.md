@@ -11,7 +11,7 @@ The home page contains the mobile-first prediction entry design, including:
 - Super Pick treatment
 - Clear and save-predictions controls
 
-The displayed fixtures are temporary mock data. The next build stage connects these to Supabase and football-data.org.
+The displayed fixtures are temporary mock data. The next build stage connects these to Supabase and API-Football.
 
 ## Rules agreed so far
 
@@ -37,7 +37,7 @@ Then open `http://localhost:3000`.
 
 ## Environment variables
 
-Copy `.env.example` to `.env.local` for local development. In Netlify, add `FOOTBALL_DATA_API_KEY` and `SUPABASE_SECRET_KEY` in the site's environment-variable settings. Do not expose either to browser code or commit them to Git.
+Copy `.env.example` to `.env.local` for local development. In Netlify, add `API_FOOTBALL_KEY` and `SUPABASE_SECRET_KEY` in the site's environment-variable settings. Do not expose either to browser code or commit them to Git.
 
 ## Supabase setup
 
@@ -46,11 +46,11 @@ Copy `.env.example` to `.env.local` for local development. In Netlify, add `FOOT
 3. Open the **SQL Editor**, create a new query, paste in `supabase/schema.sql`, and run it once.
 4. Under **Authentication > Providers**, leave email/password enabled for the first release. Set the site URL and redirect URL after the Netlify deployment exists.
 
-The publishable key is safe for browser use because the database policies in `supabase/schema.sql` limit access. The football-data token and Supabase secret key are different: keep them private in Netlify and access them only from a server-side scheduled function.
+The publishable key is safe for browser use because the database policies in `supabase/schema.sql` limit access. The API-Football token and Supabase secret key are different: keep them private in Netlify and access them only from a server-side scheduled function.
 
 ## Fixture sync
 
-`netlify/functions/sync-fixtures.ts` imports Premier League fixtures, completed scores, club crests and current table/form data from football-data.org every six hours. Run `supabase/migrations/20260816_add_fixture_sync_fields.sql` once in the Supabase SQL editor before deploying. Then add `FOOTBALL_DATA_API_KEY` and `SUPABASE_SECRET_KEY` to Netlify; the function will run on its schedule after deployment.
+`netlify/functions/sync-fixtures.ts` imports Premier League fixtures, completed scores, club crests and current table/form data from API-Football every six hours. Run `supabase/migrations/20260816_add_fixture_sync_fields.sql` once in the Supabase SQL editor before deploying. Then add `API_FOOTBALL_KEY` and `SUPABASE_SECRET_KEY` to Netlify; the function will run on its schedule after deployment.
 
 ## Supabase tables
 

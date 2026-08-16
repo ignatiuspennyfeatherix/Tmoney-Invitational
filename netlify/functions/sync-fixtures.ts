@@ -136,6 +136,18 @@ export default async () => {
     });
     const { error: survivorRoundsError } = await supabase.from("survivor_rounds").upsert(survivorRounds, { onConflict: "season_id,round_number" });
     if (survivorRoundsError) throw survivorRoundsError;
+    const { data: survivorPicks, error: survivorPicksError } = await supabase.from("survivor_picks").select("id, team_id, round_id, result, survivor_rounds(round_number), teams(provider_id)");
+    if (survivorPicksError) throw survivorPicksError;
+    await Promise.all((survivorPicks ?? []).map(async (pick) => {
+      if (pick.result && pick.result !== "pending") return;
+      const round = Array.isArray(pick.survivor_rounds) ? pick.survivor_rounds[0] : pick.survivor_rounds;
+      const team = Array.isArray(pick.teams) ? pick.teams[0] : pick.teams;
+      const roundFixture = fixturesResponse.find((fixture) => fixture.event === round?.round_number && fixture.finished && (fixture.team_h === team?.provider_id || fixture.team_a === team?.provider_id));
+      if (!roundFixture) return;
+      const teamWon = roundFixture.team_h === team.provider_id ? roundFixture.team_h_score! > roundFixture.team_a_score! : roundFixture.team_a_score! > roundFixture.team_h_score!;
+      const { error } = await supabase.from("survivor_picks").update({ result: teamWon ? "survived" : "lost", processed_at: new Date().toISOString() }).eq("id", pick.id);
+      if (error) throw error;
+    }));
     const finishedFixtures = new Map(fixturesResponse.filter((fixture) => fixture.finished).map((fixture) => [fixture.id, fixture]));
     const { data: predictions, error: predictionsError } = await supabase.from("predictions").select("id, fixture_id, home_score, away_score");
     if (predictionsError) throw predictionsError;

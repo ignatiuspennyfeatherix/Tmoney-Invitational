@@ -120,7 +120,7 @@ export default function Home() {
       const [{ data: rounds }, { data: teams }, { data: picks }] = await Promise.all([
         supabase.from("survivor_rounds").select("id, round_number, starts_at, ends_at").gt("ends_at", new Date().toISOString()).order("round_number", { ascending: true }).limit(1),
         supabase.from("teams").select("id, name, short_name, crest_url, league_position, recent_form").order("name"),
-        supabase.from("survivor_picks").select("team_id, round_id").eq("user_id", session.user.id),
+        supabase.from("survivor_picks").select("team_id, round_id, result").eq("user_id", session.user.id),
       ]);
       const nextRound = rounds?.[0] as SurvivorRound | undefined;
       setSurvivorRound(nextRound ?? null);

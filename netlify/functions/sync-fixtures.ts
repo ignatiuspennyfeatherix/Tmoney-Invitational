@@ -128,6 +128,14 @@ export default async () => {
       });
     const { error: fixturesError } = await supabase.from("fixtures").upsert(fixtures, { onConflict: "provider_id" });
     if (fixturesError) throw fixturesError;
+    const survivorRounds = [...new Map(fixturesResponse.filter((fixture) => fixture.event && fixture.kickoff_time).map((fixture) => [fixture.event, fixture])).values()].map((firstFixture) => {
+      const roundFixtures = fixturesResponse.filter((fixture) => fixture.event === firstFixture.event && fixture.kickoff_time);
+      const startsAt = roundFixtures.map((fixture) => new Date(fixture.kickoff_time as string).getTime()).sort((first, second) => first - second)[0];
+      const endsAt = roundFixtures.map((fixture) => new Date(fixture.kickoff_time as string).getTime()).sort((first, second) => second - first)[0];
+      return { season_id: seasonId, round_number: firstFixture.event as number, starts_at: new Date(startsAt).toISOString(), ends_at: new Date(endsAt + 2 * 60 * 60 * 1000).toISOString() };
+    });
+    const { error: survivorRoundsError } = await supabase.from("survivor_rounds").upsert(survivorRounds, { onConflict: "season_id,round_number" });
+    if (survivorRoundsError) throw survivorRoundsError;
     const finishedFixtures = new Map(fixturesResponse.filter((fixture) => fixture.finished).map((fixture) => [fixture.id, fixture]));
     const { data: predictions, error: predictionsError } = await supabase.from("predictions").select("id, fixture_id, home_score, away_score");
     if (predictionsError) throw predictionsError;

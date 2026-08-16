@@ -10,6 +10,7 @@ type Team = { id: string; name: string; short_name: string; crest_url: string | 
 type Fixture = { id: string; kickoff_at: string; matchday: number | null; status: "scheduled" | "live" | "finished" | "postponed" | "cancelled"; home_team: Team; away_team: Team };
 type Prediction = { fixture_id: string; home_score: number; away_score: number };
 type LeaderboardRow = { id: string; display_name: string; points: number };
+type SurvivorRound = { id: string; round_number: number; starts_at: string; ends_at: string };
 
 function readableKickoff(kickoffAt: string) {
   return new Intl.DateTimeFormat("en-GB", { weekday: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" }).format(new Date(kickoffAt));
@@ -47,6 +48,11 @@ export default function Home() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
   const [leaderboard, setLeaderboard] = useState<LeaderboardRow[]>([]);
+  const [survivorRound, setSurvivorRound] = useState<SurvivorRound | null>(null);
+  const [survivorTeams, setSurvivorTeams] = useState<Team[]>([]);
+  const [survivorPick, setSurvivorPick] = useState("");
+  const [survivorUsed, setSurvivorUsed] = useState<string[]>([]);
+  const [survivorMessage, setSurvivorMessage] = useState("");
 
   useEffect(() => {
     const loadSession = async () => {
@@ -108,6 +114,24 @@ export default function Home() {
     void loadLeaderboard();
   }, [session, saveMessage]);
 
+  useEffect(() => {
+    const loadSurvivor = async () => {
+      if (!session) return;
+      const [{ data: rounds }, { data: teams }, { data: picks }] = await Promise.all([
+        supabase.from("survivor_rounds").select("id, round_number, starts_at, ends_at").gt("ends_at", new Date().toISOString()).order("round_number", { ascending: true }).limit(1),
+        supabase.from("teams").select("id, name, short_name, crest_url, league_position, recent_form").order("name"),
+        supabase.from("survivor_picks").select("team_id, round_id").eq("user_id", session.user.id),
+      ]);
+      const nextRound = rounds?.[0] as SurvivorRound | undefined;
+      setSurvivorRound(nextRound ?? null);
+      setSurvivorTeams((teams ?? []) as Team[]);
+      setSurvivorUsed((picks ?? []).map((pick) => pick.team_id));
+      const existingPick = (picks ?? []).find((pick) => pick.round_id === nextRound?.id);
+      setSurvivorPick(existingPick?.team_id ?? "");
+    };
+    void loadSurvivor();
+  }, [session]);
+
   const createProfile = async (currentSession: Session) => {
     const displayName = currentSession.user.email?.split("@")[0] ?? "Player";
     await supabase.from("profiles").upsert({ id: currentSession.user.id, display_name: displayName }, { onConflict: "id" });
@@ -141,9 +165,18 @@ export default function Home() {
     setIsSubmitting(false);
   };
 
+  const saveSurvivorPick = async () => {
+    if (!session || !survivorRound || !survivorPick) return;
+    setIsSubmitting(true);
+    const { error } = await supabase.from("survivor_picks").upsert({ round_id: survivorRound.id, user_id: session.user.id, team_id: survivorPick }, { onConflict: "round_id,user_id" });
+    setSurvivorMessage(error ? error.message : "Survivor pick saved.");
+    if (!error && !survivorUsed.includes(survivorPick)) setSurvivorUsed((current) => [...current, survivorPick]);
+    setIsSubmitting(false);
+  };
+
   const signOut = async () => { await supabase.auth.signOut(); setScores({}); setSaveMessage(""); };
   const matchday = fixtures[0]?.matchday;
   const completedPredictions = Object.keys(scores).length;
 
-  return <main className={styles.page}><section className={styles.app}><header className={styles.header}><div className={styles.headerRow}><div><span>Premier League prediction league</span><h1>T-Money Invitational</h1><p>{matchday ? `Gameweek ${matchday}` : "Upcoming fixtures"} · Predictions lock at kick-off</p></div>{session && <button className={styles.signOut} onClick={signOut}>Sign out</button>}</div></header><nav className={styles.nav}><a className={styles.active} href="#predictions">Predictions</a><a href="#table">League table</a><a href="#survivor">Survivor</a></nav><section className={styles.content} id="predictions">{!session && <form className={styles.auth} onSubmit={submitAuth}><strong>{isCreatingAccount ? "Join the Invitational" : "Sign in to make picks"}</strong><div className={styles.authFields}><input value={email} onChange={(event) => setEmail(event.target.value)} type="email" placeholder="Email address" required /><input value={password} onChange={(event) => setPassword(event.target.value)} type="password" placeholder="Password" minLength={6} required /><button disabled={isSubmitting}>{isSubmitting ? "Please wait" : isCreatingAccount ? "Create account" : "Sign in"}</button></div>{authMessage && <p>{authMessage}</p>}<button className={styles.authToggle} type="button" onClick={() => { setIsCreatingAccount((current) => !current); setAuthMessage(""); }}>{isCreatingAccount ? "Already have an account? Sign in" : "New here? Create an account"}</button></form>}{session && <p className={styles.welcome}>Signed in as <strong>{session.user.email}</strong></p>}<div className={styles.sectionHeader}><h2>Pick every score</h2><span>{completedPredictions} of {fixtures.length} complete</span></div>{fixtureMessage && <p className={styles.saveMessage}>{fixtureMessage}</p>}{fixtures.map((fixture) => { const [homeScore, awayScore] = scores[fixture.id] ?? [0, 0]; return <article className={styles.fixture} key={fixture.id}><div className={styles.fixtureHeader}><span>{readableKickoff(fixture.kickoff_at)}</span><span>{ordinal(fixture.home_team.league_position)} vs {ordinal(fixture.away_team.league_position)}</span></div><div className={styles.fixtureGrid}><TeamCard team={fixture.home_team} /><div className={styles.scoreArea}><div className={styles.scoreLine}><div className={styles.scoreControl}><button onClick={() => changeScore(fixture.id, 0, 1)} aria-label={`Increase ${fixture.home_team.name} score`}>+</button><output>{homeScore}</output><button onClick={() => changeScore(fixture.id, 0, -1)} aria-label={`Decrease ${fixture.home_team.name} score`}>−</button></div><span>−</span><div className={styles.scoreControl}><button onClick={() => changeScore(fixture.id, 1, 1)} aria-label={`Increase ${fixture.away_team.name} score`}>+</button><output>{awayScore}</output><button onClick={() => changeScore(fixture.id, 1, -1)} aria-label={`Decrease ${fixture.away_team.name} score`}>−</button></div></div></div><TeamCard team={fixture.away_team} /></div></article>; })}{fixtures.length > 0 && <div className={styles.actions}><button className={styles.clear} onClick={clearPredictions}>Clear</button><button className={styles.save} disabled={isSubmitting} onClick={savePredictions}>{isSubmitting ? "Saving…" : "Save predictions"}</button></div>}{saveMessage && <p className={styles.saveMessage}>{saveMessage}</p>}</section><section className={styles.content} id="table"><div className={styles.sectionHeader}><h2>League table</h2><span>All-time points</span></div>{!session ? <p className={styles.saveMessage}>Sign in to view the league table.</p> : leaderboard.length ? <div className={styles.leaderboard}>{leaderboard.map((player, index) => <div className={styles.leaderboardRow} key={player.id}><strong>{index + 1}</strong><span>{player.display_name}</span><b>{player.points} pts</b></div>)}</div> : <p className={styles.saveMessage}>No scored predictions yet.</p>}</section><section className={styles.content} id="survivor"><div className={styles.sectionHeader}><h2>Survivor</h2><span>Coming next</span></div><p className={styles.saveMessage}>Choose one club each round. Three lives, with fresh rounds released through the season.</p></section></section></main>;
+  return <main className={styles.page}><section className={styles.app}><header className={styles.header}><div className={styles.headerRow}><div><span>Premier League prediction league</span><h1>T-Money Invitational</h1><p>{matchday ? `Gameweek ${matchday}` : "Upcoming fixtures"} · Predictions lock at kick-off</p></div>{session && <button className={styles.signOut} onClick={signOut}>Sign out</button>}</div></header><nav className={styles.nav}><a className={styles.active} href="#predictions">Predictions</a><a href="#table">League table</a><a href="#survivor">Survivor</a></nav><section className={styles.content} id="predictions">{!session && <form className={styles.auth} onSubmit={submitAuth}><strong>{isCreatingAccount ? "Join the Invitational" : "Sign in to make picks"}</strong><div className={styles.authFields}><input value={email} onChange={(event) => setEmail(event.target.value)} type="email" placeholder="Email address" required /><input value={password} onChange={(event) => setPassword(event.target.value)} type="password" minLength={6} placeholder="Password" required /><button disabled={isSubmitting}>{isSubmitting ? "Please wait" : isCreatingAccount ? "Create account" : "Sign in"}</button></div>{authMessage && <p>{authMessage}</p>}<button className={styles.authToggle} type="button" onClick={() => { setIsCreatingAccount((current) => !current); setAuthMessage(""); }}>{isCreatingAccount ? "Already have an account? Sign in" : "New here? Create an account"}</button></form>}{session && <p className={styles.welcome}>Signed in as <strong>{session.user.email}</strong></p>}<div className={styles.sectionHeader}><h2>Pick every score</h2><span>{completedPredictions} of {fixtures.length} complete</span></div>{fixtureMessage && <p className={styles.saveMessage}>{fixtureMessage}</p>}{fixtures.map((fixture) => { const [homeScore, awayScore] = scores[fixture.id] ?? [0, 0]; return <article className={styles.fixture} key={fixture.id}><div className={styles.fixtureHeader}><span>{readableKickoff(fixture.kickoff_at)}</span><span>{ordinal(fixture.home_team.league_position)} vs {ordinal(fixture.away_team.league_position)}</span></div><div className={styles.fixtureGrid}><TeamCard team={fixture.home_team} /><div className={styles.scoreArea}><div className={styles.scoreLine}><div className={styles.scoreControl}><button onClick={() => changeScore(fixture.id, 0, 1)} aria-label={`Increase ${fixture.home_team.name} score`}>+</button><output>{homeScore}</output><button onClick={() => changeScore(fixture.id, 0, -1)} aria-label={`Decrease ${fixture.home_team.name} score`}>−</button></div><span>−</span><div className={styles.scoreControl}><button onClick={() => changeScore(fixture.id, 1, 1)} aria-label={`Increase ${fixture.away_team.name} score`}>+</button><output>{awayScore}</output><button onClick={() => changeScore(fixture.id, 1, -1)} aria-label={`Decrease ${fixture.away_team.name} score`}>−</button></div></div></div><TeamCard team={fixture.away_team} /></div></article>; })}{fixtures.length > 0 && <div className={styles.actions}><button className={styles.clear} onClick={clearPredictions}>Clear</button><button className={styles.save} disabled={isSubmitting} onClick={savePredictions}>{isSubmitting ? "Saving…" : "Save predictions"}</button></div>}{saveMessage && <p className={styles.saveMessage}>{saveMessage}</p>}</section><section className={styles.content} id="table"><div className={styles.sectionHeader}><h2>League table</h2><span>All-time points</span></div>{!session ? <p className={styles.saveMessage}>Sign in to view the league table.</p> : leaderboard.length ? <div className={styles.leaderboard}>{leaderboard.map((player, index) => <div className={styles.leaderboardRow} key={player.id}><strong>{index + 1}</strong><span>{player.display_name}</span><b>{player.points} pts</b></div>)}</div> : <p className={styles.saveMessage}>No scored predictions yet.</p>}</section><section className={styles.content} id="survivor"><div className={styles.sectionHeader}><h2>Survivor</h2><span>3 lives</span></div>{!session ? <p className={styles.saveMessage}>Sign in to enter Survivor.</p> : !survivorRound ? <p className={styles.saveMessage}>The next Survivor round will appear when fixtures are released.</p> : <><p className={styles.saveMessage}>Round {survivorRound.round_number} · Pick one club. Clubs can only be used once.</p><select className={styles.survivorSelect} value={survivorPick} onChange={(event) => setSurvivorPick(event.target.value)}><option value="">Choose a club</option>{survivorTeams.map((team) => <option key={team.id} value={team.id} disabled={survivorUsed.includes(team.id) && survivorPick !== team.id}>{team.name}{survivorUsed.includes(team.id) && survivorPick !== team.id ? " · used" : ""}</option>)}</select><button className={styles.save} disabled={!survivorPick || isSubmitting} onClick={saveSurvivorPick}>Save Survivor pick</button>{survivorMessage && <p className={styles.saveMessage}>{survivorMessage}</p>}</>}</section></section></main>;
 }

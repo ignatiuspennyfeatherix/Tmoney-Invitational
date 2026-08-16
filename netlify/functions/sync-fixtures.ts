@@ -53,10 +53,14 @@ export default async () => {
   }
 
   try {
-    const [matchesResponse, standingsResponse] = await Promise.all([
-      footballData<{ matches: ProviderMatch[] }>("/matches", footballDataToken),
-      footballData<{ standings: Array<{ type: string; table: ProviderStanding[] }> }>("/standings", footballDataToken),
-    ]);
+    const matchesResponse = await footballData<{ matches: ProviderMatch[] }>("/matches", footballDataToken);
+    let standingsResponse: { standings: Array<{ type: string; table: ProviderStanding[] }> } = { standings: [] };
+
+    try {
+      standingsResponse = await footballData<{ standings: Array<{ type: string; table: ProviderStanding[] }> }>("/standings", footballDataToken);
+    } catch (error) {
+      console.warn("Could not import league standings; continuing with fixture data.", error);
+    }
 
     const supabase = createClient(supabaseUrl, supabaseSecretKey, {
       auth: { autoRefreshToken: false, persistSession: false },

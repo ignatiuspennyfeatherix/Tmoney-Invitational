@@ -5,6 +5,14 @@ import { supabase } from "@/lib/supabase";
 type Team = { id: string; name: string; crest_url?: string | null };
 type Zone = "winner" | "champions" | "relegated";
 
+function clubKey(name: string) {
+  const key = name.toLowerCase().replace(/[^a-z]/g, "").replace(/^afc/, "");
+  const aliases: Record<string, string> = {
+    afcbournemouth: "bournemouth", bournemouth: "bournemouth", arsenalfc: "arsenal", arsenal: "arsenal", astonvillafc: "astonvilla", astonvilla: "astonvilla", brentfordfc: "brentford", brentford: "brentford", brightonandhovealbion: "brighton", brightonandhovealbionfc: "brighton", brighton: "brighton", chelseafc: "chelsea", chelsea: "chelsea", coventrycity: "coventry", coventry: "coventry", crystalpalacefc: "crystalpalace", crystalpalace: "crystalpalace", evertonfc: "everton", everton: "everton", fulhamfc: "fulham", fulham: "fulham", hullcityafc: "hull", hullcity: "hull", hull: "hull", ipswichtownfc: "ipswich", ipswichtown: "ipswich", ipswich: "ipswich", liverpoolfc: "liverpool", liverpool: "liverpool", manchestercityfc: "manchestercity", manchestercity: "manchestercity", manutd: "manchesterunited", manchesterunited: "manchesterunited", newcastleunited: "newcastle", newcastle: "newcastle", nottmforest: "nottinghamforest", nottinghamforest: "nottinghamforest", leedsunited: "leeds", leeds: "leeds", sunderland: "sunderland", tottenhamhotspur: "tottenham", tottenham: "tottenham", spurs: "tottenham",
+  };
+  return aliases[key] ?? key.replace(/(football|fc|afc)$/g, "");
+}
+
 function Card({ team, remove, drag }: { team: Team; remove?: () => void; drag?: (event: DragEvent<HTMLElement>) => void }) {
   return <div className="teamCard" draggable={Boolean(drag)} onDragStart={drag}>{team.crest_url ? <img src={team.crest_url} alt="" /> : <span>⚽</span>}<strong>{team.name}</strong>{remove && <button type="button" onClick={remove}>×</button>}</div>;
 }
@@ -12,7 +20,7 @@ function Card({ team, remove, drag }: { team: Team; remove?: () => void; drag?: 
 export default function PreseasonPage() {
   const [seasonId, setSeasonId] = useState(""); const [teams, setTeams] = useState<Team[]>([]); const [winner, setWinner] = useState(""); const [champions, setChampions] = useState<string[]>([]); const [relegated, setRelegated] = useState<string[]>([]); const [scorer, setScorer] = useState(""); const [assists, setAssists] = useState(""); const [message, setMessage] = useState("Loading…");
   useEffect(() => { void (async () => { const [{ data: season }, { data: rows }] = await Promise.all([supabase.from("seasons").select("id").eq("is_active", true).limit(1).single(), supabase.from("teams").select("id,name,crest_url").order("name")]); setSeasonId(season?.id ?? ""); setTeams((rows ?? []) as Team[]); setMessage(""); })(); }, []);
-  const team = (id: string) => teams.find((item) => item.id === id); const selected = [winner, ...champions, ...relegated]; const available = teams.filter((item, index, list) => !selected.includes(item.id) && list.findIndex((candidate) => candidate.name.toLowerCase().replace(/[^a-z]/g, "") === item.name.toLowerCase().replace(/[^a-z]/g, "")) === index);
+  const team = (id: string) => teams.find((item) => item.id === id); const selected = [winner, ...champions, ...relegated]; const available = Array.from(new Map(teams.map((item) => [clubKey(item.name), item])).values()).filter((item) => !selected.includes(item.id));
   const add = (id: string, zone: Zone) => { if (!id) return; setWinner((current) => zone === "winner" ? id : current === id ? "" : current); setChampions((current) => zone === "champions" ? [...current.filter((item) => item !== id), id].slice(0, 4) : current.filter((item) => item !== id)); setRelegated((current) => zone === "relegated" ? [...current.filter((item) => item !== id), id].slice(0, 3) : current.filter((item) => item !== id)); };
   const remove = (id: string) => { setWinner((current) => current === id ? "" : current); setChampions((current) => current.filter((item) => item !== id)); setRelegated((current) => current.filter((item) => item !== id)); };
   const drop = (event: DragEvent<HTMLElement>, zone: Zone) => { event.preventDefault(); const id = event.dataTransfer.getData("text/plain"); if ((zone === "winner" || zone === "champions" && champions.length < 4 || zone === "relegated" && relegated.length < 3)) add(id, zone); };

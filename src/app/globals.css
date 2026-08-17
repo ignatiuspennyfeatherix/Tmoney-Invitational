@@ -19,5 +19,14 @@ button { font: inherit; }
   flex: 0 0 36px;
 }
 
+.quickPickers h2 { margin: 0 0 10px; }
+.quickPick { display: block; margin: 9px 0; font-weight: 700; }
+.quickPick select, .playerPicks select { display: block; width: 100%; box-sizing: border-box; padding: 10px; margin-top: 5px; border: 1px solid #cbd7cc; border-radius: 8px; background: white; }
+.predictionBoard { display: grid; gap: 10px; }
+.dropSection { padding: 12px; background: white; border: 2px dashed #c5d3c7; border-radius: 10px; }
+.dropSection h2 { margin: 0 0 8px; }
+.dropContent { display: grid; gap: 7px; }
+.emptySlot { display: grid; place-items: center; min-height: 40px; color: #7b897d; border: 1px dashed #cbd7cc; border-radius: 7px; font-size: 12px; }
+
 .siteLinks { display: flex; justify-content: center; gap: 18px; padding: 12px 16px 0; }
 .siteLinks a { color: #173021; font-size: 12px; font-weight: 700; text-decoration: none; }
